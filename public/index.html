@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="bower_components/jquery/dist/jquery.min.js"></script>
+<script src="bower_components/socket.io-client/socket.io.js"></script>
+<script src="js/socket.io-stream.js"></script>
+</head>
+<body>
+<input id="file" type="file" multiple/>
+<div><meter id="progress" max="1" /></div>
+<div><span id="speed"></span><span> kB/s</span></div>
+<script>
+$(function() {
+  var files = {};
+  $('#file').change(function(e) {
+    var selectedFiles = e.target.files;
+    for (var i = 0; i < selectedFiles.length; i++) {
+      var file = selectedFiles[i];
+      files[file.name] = file;
+    }
+  });
+
+  var socket = io('http://localhost:7337');
+  socket.on('get-file', function(data) {
+    var file = files[data.id];
+    console.log(data, file);
+
+    var stream = ss.createStream();
+    ss(socket).emit('f-' + data.reqId, stream, { size: file.size });
+
+    socket.once('x-' + data.reqId, function() {
+      console.log('%s: aborted', data.id);
+      stream.end();
+    });
+
+    var end = (data.range && isFinite(data.range.end)) ? data.range.end : file.size;
+    var blob = data.range ? file.slice(data.range.start, end) : file;
+    var size = 0;
+    console.log('%s: uploading %d bytes', data.id, blob.size);
+
+    var t = new Date();
+    var interval = setInterval(function() {
+      $('#speed').text(size * 1000 / 1024 / (new Date() - t));
+    }, 1000);
+    ss.createBlobReadStream(blob)
+    .on('data', function(chunk) {
+      // update progress
+      size += chunk.length;
+      // console.log('%s: %d bytes (%d%%) uploaded', data.id, size, size / blob.size * 100);
+      $('#progress').val(size / blob.size);
+    })
+    .on('error', function(err) {
+      console.error('%s:', data.id, err);
+      clearInterval(interval);
+    })
+    .on('close', function() {
+      console.log('%s: closed', data.id);
+      clearInterval(interval);
+    })
+    .pipe(stream);
+
+
+  });
+});
+</script>
+</body>
+</html>
