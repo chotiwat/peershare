@@ -2,16 +2,23 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css"/>
 <script src="bower_components/jquery/dist/jquery.min.js"></script>
 <script src="bower_components/socket.io-client/socket.io.js"></script>
 <script src="js/socket.io-stream.js"></script>
 </head>
 <body>
-<input id="file" type="file" multiple/>
-<div><meter id="progress" max="1" /></div>
-<div><span id="speed"></span><span> kB/s</span></div>
+<div class="container">
+  <div class="list-group" id="file-list">
+  </div>
+  <input id="file" type="file" multiple/>
+  <div><meter id="progress" max="1"/></div>
+  <div><span id="speed"></span><span> kB/s</span></div>
+</div>
 <script>
 $(function() {
+  var socket = io('http://localhost:7337');
+
   var files = {};
   $('#file').change(function(e) {
     var selectedFiles = e.target.files;
@@ -19,19 +26,26 @@ $(function() {
       var file = selectedFiles[i];
       files[file.name] = file;
     }
+    $('#file-list').empty();
+    for (var fileName in files) {
+      $('#file-list').append(
+        $('<a/>', {
+          class: 'list-group-item',
+          href: '/f/' + socket.id + '/' + fileName,
+          target: '_blank'
+        })
+        .text(fileName));
+    }
   });
-
-  var socket = io('http://localhost:7337');
+  
   socket.on('get-file', function(data) {
     var file = files[data.id];
     console.log(data, file);
 
     var stream = ss.createStream();
-    ss(socket).emit('f-' + data.reqId, stream, { size: file.size });
-
-    socket.once('x-' + data.reqId, function() {
-      console.log('%s: aborted', data.id);
-      stream.end();
+    ss(socket).emit('f-' + data.reqId, stream, {
+      size: file.size,
+      type: file.type
     });
 
     var end = (data.range && isFinite(data.range.end)) ? data.range.end : file.size;
@@ -43,6 +57,13 @@ $(function() {
     var interval = setInterval(function() {
       $('#speed').text(size * 1000 / 1024 / (new Date() - t));
     }, 1000);
+
+    socket.once('x-' + data.reqId, function() {
+      console.log('%s: aborted', data.id);
+      stream.end();
+      clearInterval(interval);
+    });
+
     ss.createBlobReadStream(blob)
     .on('data', function(chunk) {
       // update progress

@@ -92,11 +92,19 @@ server.route([
             sec, size / 1024 / sec);
         });
         let res = rep(stream);
+        res.type(data.type);
+        
         if (range) {
+          let end = range.end ? range.end : data.size;
           res.header('Content-Range', util.format('bytes %d-%d/%d', range.start,
-            (range.end ? range.end : data.size) - 1,
+            end - 1,
             data.size));
+          res.code(206);
+          res.bytes(end - range.start);
+        } else {
+          res.bytes(data.size);
         }
+        
         return res;
       });
     }
