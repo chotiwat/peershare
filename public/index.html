@@ -10,12 +10,13 @@
 </head>
 <body>
 <div class="container">
-  <form class="form-inline">
-    <div class="form-group">
+  <form class="form" id="peerForm">
+    <div class="form-group" id="peerIdGroup">
       <label for="peerId">Peer Id</label>
-      <input type="text" class="form-control" id="peerId"/>
+      <input type="text" class="form-control" id="peerId" placeholder="peerId" required/>
+      <span id="peerIdHelp" class="help-block" style="display:none"></span>
     </div>
-    <button type="submit" class="btn btn-default">Save</button>
+    <button type="submit" class="btn btn-primary">Save</button>
   </form>
   <div class="list-group" id="fileList">
   </div>
@@ -36,12 +37,29 @@ $(function() {
   var socket = io('http://localhost:7337');
   var peer = { id: randomId() };
 
-  $('#peerId').attr('placeholder', peer.id);
+  $('#peerId').val(peer.id);
 
   // handle connection and reconnection
   socket.on('connect', function() {
     console.log('connect');
     socket.emit('register', peer);
+  });
+
+  // custom peer id
+  $('#peerForm').submit(function(e) {
+    var newPeer = { id: $('#peerId').val() };
+    socket.emit('updatePeer', peer.id, newPeer);
+    socket.once('updatePeerResult', function(err) {
+      if (err) {
+        $('#peerIdGroup').addClass('has-error');
+        $('#peerIdHelp').text(err).show();
+      } else {
+        $('#peerIdGroup').removeClass('has-error');
+        $('#peerIdHelp').empty().hide();
+        peer = newPeer;
+      }
+    });
+    e.preventDefault();
   });
 
   var files = {};

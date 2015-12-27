@@ -34,6 +34,23 @@ io.on('connection', function(socket) {
     console.log('socket %s registered as %s', socket.id, peer.id);
     peerMap[peer.id] = socket.id;
   });
+  socket.on('updatePeer', function(id, peer) {
+    console.log('%s: update peer: %j', id, peer);
+    if (peer.id !== id) {
+      let existingSocketId = peerMap[peer.id];
+      if (existingSocketId && io.sockets.connected[existingSocketId]) {
+        // id already exists
+        socket.emit('updatePeerResult', 'Peer id already exists.');
+      } else {
+        // change peer id
+        if (peerMap[id]) {
+          delete peerMap[id];
+        }
+        peerMap[peer.id] = socket.id;
+        socket.emit('updatePeerResult');
+      }
+    }
+  });
 });
 
 server.register(require('inert'), () => {});
@@ -46,7 +63,7 @@ server.route([
       if (req.method == 'HEAD') {
         return rep().header('Accept-Ranges', 'bytes');
       }
-      
+
       const p = req.params;
       const socketId = peerMap[p.peerId];
       const socket = io.sockets.connected[socketId];
