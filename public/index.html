@@ -5,19 +5,44 @@
 <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css"/>
 <script src="bower_components/jquery/dist/jquery.min.js"></script>
 <script src="bower_components/socket.io-client/socket.io.js"></script>
+<script src="bower_components/chance/dist/chance.min.js"></script>
 <script src="js/socket.io-stream.js"></script>
 </head>
 <body>
 <div class="container">
-  <div class="list-group" id="file-list">
+  <form class="form-inline">
+    <div class="form-group">
+      <label for="peerId">Peer Id</label>
+      <input type="text" class="form-control" id="peerId"/>
+    </div>
+    <button type="submit" class="btn btn-default">Save</button>
+  </form>
+  <div class="list-group" id="fileList">
   </div>
   <input id="file" type="file" multiple/>
   <div><meter id="progress" max="1"/></div>
   <div><span id="speed"></span><span> kB/s</span></div>
 </div>
 <script>
+var chanceOptions = {
+  length: 6,
+  pool: '1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM'
+};
+function randomId() {
+  return chance.string(chanceOptions);
+}
+
 $(function() {
   var socket = io('http://localhost:7337');
+  var peer = { id: randomId() };
+
+  $('#peerId').attr('placeholder', peer.id);
+
+  // handle connection and reconnection
+  socket.on('connect', function() {
+    console.log('connect');
+    socket.emit('register', peer);
+  });
 
   var files = {};
   $('#file').change(function(e) {
@@ -26,12 +51,12 @@ $(function() {
       var file = selectedFiles[i];
       files[file.name] = file;
     }
-    $('#file-list').empty();
+    $('#fileList').empty();
     for (var fileName in files) {
-      $('#file-list').append(
+      $('#fileList').append(
         $('<a/>', {
           class: 'list-group-item',
-          href: '/f/' + socket.id + '/' + fileName,
+          href: '/f/' + peer.id + '/' + fileName,
           target: '_blank'
         })
         .text(fileName));

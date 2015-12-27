@@ -26,9 +26,14 @@ server.register({
   }
 }, () => {});
 
+let peerMap = {};
 const io = server.plugins['hapi-io'].io;
 io.on('connection', function(socket) {
   console.log('peer connected: %s', socket.id);
+  socket.on('register', function(peer) {
+    console.log('socket %s registered as %s', socket.id, peer.id);
+    peerMap[peer.id] = socket.id;
+  });
 });
 
 server.register(require('inert'), () => {});
@@ -43,7 +48,8 @@ server.route([
       }
       
       const p = req.params;
-      const socket = io.sockets.connected[p.peerId];
+      const socketId = peerMap[p.peerId];
+      const socket = io.sockets.connected[socketId];
 
       if (!socket) {
         return rep(Boom.notFound());
@@ -93,7 +99,7 @@ server.route([
         });
         let res = rep(stream);
         res.type(data.type);
-        
+
         if (range) {
           let end = range.end ? range.end : data.size;
           res.header('Content-Range', util.format('bytes %d-%d/%d', range.start,
