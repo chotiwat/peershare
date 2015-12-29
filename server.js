@@ -72,7 +72,7 @@ server.route([
         return rep(Boom.notFound());
       }
 
-      console.log(req.headers);
+      console.log(new Date(), req.headers);
       const m  = /bytes=(\d+)-(\d+)?/i.exec(req.headers.range);
       const range = m && {
         start: +m[1],
@@ -81,18 +81,18 @@ server.route([
 
       socket.emit('get-file', {
         id: p.fileId,
-        reqId: req.id,
+        reqId: reqId,
         range: range
       });
       // TODO: handle closed connection
       let disconnected = false;
       req.once('disconnect', () => { disconnected = true; });
-      ss(socket).once('f-' + req.id, (stream, data) => {
-        console.log('got stream: %s', req.id, data);
+      ss(socket).once('f-' + reqId, (stream, data) => {
+        console.log('got stream: %s %j %s', reqId, data, new Date());
 
         let onDisconnected = () => {
-          console.log('%s: req disconnected', req.id);
-          socket.emit('x-' + req.id);
+          console.log('%s: req disconnected %s', reqId, new Date());
+          socket.emit('x-' + reqId);
           // TODO: Do we have to close the reply?
         };
 
@@ -107,12 +107,12 @@ server.route([
         stream
         .on('data', (chunk) => {
           size += chunk.length;
-          // console.log('%s: %d bytes received', req.id, size);
+          // console.log('%s: %d bytes received', reqId, size);
         })
         .once('end', () => {
           let sec = (new Date() - t) / 1000;
-          console.log('%s: finished in %d s, avg speed = %d kB/s', req.id,
-            sec, size / 1024 / sec);
+          console.log('%s: finished in %d s, avg speed = %d kB/s, %s', reqId,
+            sec, size / 1024 / sec, new Date());
         });
         let res = rep(stream);
         res.type(data.type);
@@ -127,6 +127,8 @@ server.route([
         } else {
           res.bytes(data.size);
         }
+
+        console.log('%s: streaming %s', reqId, new Date());
         
         return res;
       });

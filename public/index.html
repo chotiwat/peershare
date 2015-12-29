@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css"/>
 <script src="bower_components/jquery/dist/jquery.min.js"></script>
-<script src="bower_components/socket.io-client/socket.io.js"></script>
+<!-- <script src="bower_components/socket.io-client/socket.io.js"></script> -->
 <script src="bower_components/chance/dist/chance.min.js"></script>
-<script src="js/socket.io-stream.js"></script>
+<!-- <script src="js/socket.io-stream.js"></script> -->
 </head>
 <body>
 <div class="container">
@@ -21,8 +21,10 @@
   <div class="list-group" id="fileList">
   </div>
   <input id="file" type="file" multiple/>
-  <div><meter id="progress" max="1"/></div>
-  <div><span id="speed"></span><span> kB/s</span></div>
+  <!-- <div><meter id="progress" max="1"/></div>
+  <div><span id="speed"></span><span> kB/s</span></div> -->
+  <ul class="list-group" id="requestList">
+  </ul>
 </div>
 <script>
 var chanceOptions = {
@@ -32,33 +34,22 @@ var chanceOptions = {
 function randomId() {
   return chance.string(chanceOptions);
 }
+function escapeCss(reqId) {
+  return reqId.replace(/[^\w]/g, '-');
+}
 
 $(function() {
-  var socket = io('http://localhost:7337');
   var peer = { id: randomId() };
 
   $('#peerId').val(peer.id);
 
-  // handle connection and reconnection
-  socket.on('connect', function() {
-    console.log('connect');
-    socket.emit('register', peer);
-  });
+  var worker = new Worker('js/file-worker.js');
+
+  worker.postMessage(['init', peer]);
 
   // custom peer id
   $('#peerForm').submit(function(e) {
-    var newPeer = { id: $('#peerId').val() };
-    socket.emit('updatePeer', peer.id, newPeer);
-    socket.once('updatePeerResult', function(err) {
-      if (err) {
-        $('#peerIdGroup').addClass('has-error');
-        $('#peerIdHelp').text(err).show();
-      } else {
-        $('#peerIdGroup').removeClass('has-error');
-        $('#peerIdHelp').empty().hide();
-        peer = newPeer;
-      }
-    });
+    worker.postMessage(['updatePeer', { id: $('#peerId').val() }]);
     e.preventDefault();
   });
 
@@ -73,60 +64,76 @@ $(function() {
     for (var fileName in files) {
       $('#fileList').append(
         $('<a/>', {
-          class: 'list-group-item',
+          'class': 'list-group-item',
           href: '/f/' + peer.id + '/' + fileName,
           target: '_blank'
         })
         .text(fileName));
     }
+
+    worker.postMessage(['updateFiles', files]);
   });
-  
-  socket.on('get-file', function(data) {
-    var file = files[data.id];
-    console.log(data, file);
 
-    var stream = ss.createStream();
-    ss(socket).emit('f-' + data.reqId, stream, {
-      size: file.size,
-      type: file.type
-    });
+  var handlers = {
+    updatePeer: function(args) {
+      var err = args[0];
+      if (err) {
+        $('#peerIdGroup').addClass('has-error');
+        $('#peerIdHelp').text(err).show();
+      } else {
+        $('#peerIdGroup').removeClass('has-error');
+        $('#peerIdHelp').empty().hide();
+        peer = args[1];
+      }
+    },
+    trackRequest: function(args) {
+      var req = args[0];
 
-    var end = (data.range && isFinite(data.range.end)) ? data.range.end : file.size;
-    var blob = data.range ? file.slice(data.range.start, end) : file;
-    var size = 0;
-    console.log('%s: uploading %d bytes', data.id, blob.size);
+      console.log('trackRequest', req);
 
-    var t = new Date();
-    var interval = setInterval(function() {
-      $('#speed').text(size * 1000 / 1024 / (new Date() - t));
-    }, 1000);
+      var $requestItem = $('<li/>', {
+        'class': 'list-group-item req-' + escapeCss(req.reqId)
+      }).append(
+        $('<strong/>').text(req.id),
+        $('<small/>').text(' ' + req.reqId),
+        $('<span/>', { 'class': 'badge'}).append(
+          $('<span/>', { 'class': 'speed-label'}).text(0),
+          $('<small/>').text(' kB/s')
+        ),
+        $('<div/>').append($('<meter/>', { max: 1 }))
+      );
+      $('#requestList').append($requestItem);
+    },
+    untrackRequest: function(args) {
+      var reqId = args[0];
 
-    socket.once('x-' + data.reqId, function() {
-      console.log('%s: aborted', data.id);
-      stream.end();
-      clearInterval(interval);
-    });
+      console.log('untrackRequest', reqId);
 
-    ss.createBlobReadStream(blob)
-    .on('data', function(chunk) {
-      // update progress
-      size += chunk.length;
-      // console.log('%s: %d bytes (%d%%) uploaded', data.id, size, size / blob.size * 100);
-      $('#progress').val(size / blob.size);
-    })
-    .on('error', function(err) {
-      console.error('%s:', data.id, err);
-      clearInterval(interval);
-    })
-    .on('close', function() {
-      console.log('%s: closed', data.id);
-      clearInterval(interval);
-    })
-    .pipe(stream);
+      $('#requestList .req-' + escapeCss(reqId)).remove();
+    },
+    progress: function(args) {
+      var reqId = escapeCss(args[0]);
+      var progress = args[1];
+      var $requestItem = $('#requestList .req-' + reqId);
+      $requestItem.find('.speed-label').text(Math.round(progress.speed));
+      $requestItem.find('meter').val(progress.size);
+    }
+  };
 
-
-  });
+  worker.onmessage = function(e) {
+    // console.log('main onMessage', e);
+    var method = e.data.shift();
+    var handler = handlers[method];
+    if (handler) {
+      handler(e.data, function() {
+        var results = Array.prototype.slice.call(arguments);
+        results.unshift(method);
+        worker.postMessage(results);
+      });
+    }
+  };
 });
+
 </script>
 </body>
 </html>
