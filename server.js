@@ -79,6 +79,8 @@ server.route([
         end: isFinite(m[2]) ? 1 + m[2] : undefined
       };
 
+      var reqId = req.id;
+
       socket.emit('get-file', {
         id: p.fileId,
         reqId: reqId,
