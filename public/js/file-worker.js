@@ -3,7 +3,7 @@ importScripts(
   'socket.io-stream.js'
 );
 
-console.log('eee');
+var highWaterMark = 512000;
 
 var socket;
 var files = {};
@@ -25,7 +25,7 @@ var handlers = {
 
       postMessage(['trackRequest', data]);
 
-      var stream = ss.createStream({ highWaterMark: 1024000 });
+      var stream = ss.createStream({ highWaterMark: highWaterMark });
       ss(socket).emit('f-' + data.reqId, stream, {
         size: file.size,
         type: file.type
@@ -56,7 +56,7 @@ var handlers = {
         untrackRequest();
       });
 
-      ss.createBlobReadStream(blob, { highWaterMark: 1024000 })
+      ss.createBlobReadStream(blob, { highWaterMark: highWaterMark })
       .on('data', function(chunk) {
         // update progress
         size += chunk.length;
