@@ -62,6 +62,10 @@ var handlers = {
         size += chunk.length;
         // console.log('%s: %d bytes (%d%%) uploaded', data.id, size, size / blob.size * 100);
       })
+      .on('end', function() {
+        console.log('%s: end', data.id);
+        untrackRequest();
+      })
       .on('error', function(err) {
         console.error('%s:', data.id, err);
         untrackRequest();
