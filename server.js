@@ -10,7 +10,7 @@ const ss = require('socket.io-stream');
 
 const server = new Hapi.Server();
 server.connection({
-  host: 'localhost',
+  host: '0.0.0.0',
   port: 7337,
   routes: {
     files: {
