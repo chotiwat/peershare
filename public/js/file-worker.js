@@ -13,7 +13,8 @@ var handlers = {
   init: function(args) {
     console.log('init:', args);
     peer = args[0];
-    socket = io('http://localhost:7337');
+    var host = args[1] || 'localhost:7337';
+    socket = io('http://' + host);
     // handle connection and reconnection
     socket.on('connect', function() {
       console.log('connect');

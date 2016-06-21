@@ -42,7 +42,7 @@ $(function() {
 
   var worker = new Worker('js/file-worker.js');
 
-  worker.postMessage(['init', peer]);
+  worker.postMessage(['init', peer, window.location.host]);
 
   // custom peer id
   $('#peerForm').submit(function(e) {
